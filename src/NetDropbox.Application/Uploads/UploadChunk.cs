@@ -34,14 +34,41 @@ public sealed class UploadChunkHandler(IAppDbContext db, IChunkStorage chunks, I
         if (session.Status != UploadSessionStatus.Open || session.IsExpired(clock.UtcNow))
             throw new AppException("Upload session is no longer open.", System.Net.HttpStatusCode.Conflict);
 
-        if (request.Index >= session.TotalChunks)
+        if (request.Index < 0 || request.Index >= session.TotalChunks)
             throw new AppException("Chunk index is outside the session range.");
 
-        var stored = await chunks.StoreAsync(session.Id, request.Index, request.Content, cancellationToken);
-        if (!string.Equals(stored.Checksum, request.Checksum, StringComparison.OrdinalIgnoreCase))
-            throw new AppException("Chunk checksum mismatch.", System.Net.HttpStatusCode.BadRequest);
+        var existing = await db.UploadChunks.SingleOrDefaultAsync(
+            x => x.UploadSessionId == session.Id && x.Index == request.Index,
+            cancellationToken);
+        if (existing is not null &&
+            !string.Equals(existing.Checksum, request.Checksum, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new AppException("An accepted chunk cannot be replaced with different content.", System.Net.HttpStatusCode.Conflict);
+        }
 
-        var existing = await db.UploadChunks.SingleOrDefaultAsync(x => x.UploadSessionId == session.Id && x.Index == request.Index, cancellationToken);
+        StoredChunk stored;
+        try
+        {
+            stored = await chunks.StoreAsync(
+                session.Id,
+                request.Index,
+                request.Content,
+                request.Checksum,
+                session.ExpectedChunkSize(request.Index),
+                cancellationToken);
+        }
+        catch (ChunkWriteConflictException exception)
+        {
+            throw new AppException(exception.Message, System.Net.HttpStatusCode.Conflict);
+        }
+        if (!stored.Committed)
+        {
+            var reason = stored.Size != session.ExpectedChunkSize(request.Index)
+                ? "Chunk size does not match the session boundary."
+                : "Chunk checksum mismatch.";
+            throw new AppException(reason, System.Net.HttpStatusCode.BadRequest);
+        }
+
         if (existing is null)
         {
             db.UploadChunks.Add(UploadChunk.Create(session.Id, request.Index, stored.Checksum, stored.Size));
@@ -55,4 +82,3 @@ public sealed class UploadChunkHandler(IAppDbContext db, IChunkStorage chunks, I
             .ToArrayAsync(cancellationToken);
     }
 }
-

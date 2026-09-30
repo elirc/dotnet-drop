@@ -42,17 +42,22 @@ public sealed class CompleteUploadHandler(
         if (chunkIndexes.Length != session.TotalChunks || !chunkIndexes.SequenceEqual(Enumerable.Range(0, session.TotalChunks)))
             throw new AppException("Upload is missing chunks.", System.Net.HttpStatusCode.Conflict);
 
+        var user = await db.Users.SingleAsync(x => x.Id == request.UserId, cancellationToken);
+        user.EnsureCanReserve(session.TotalSize);
+
         await using var assembled = await chunks.OpenAssembledAsync(session, chunkIndexes, cancellationToken);
-        var computed = await Hashing.Sha256Async(assembled, cancellationToken);
-        if (!string.Equals(computed, session.FinalContentHash, StringComparison.OrdinalIgnoreCase))
+        var assembledContent = await Hashing.Sha256WithLengthAsync(assembled, cancellationToken);
+        if (assembledContent.Length != session.TotalSize)
+            throw new AppException("Final file size does not match the upload session.", System.Net.HttpStatusCode.BadRequest);
+        if (!string.Equals(assembledContent.Checksum, session.FinalContentHash, StringComparison.OrdinalIgnoreCase))
             throw new AppException("Final file checksum mismatch.", System.Net.HttpStatusCode.BadRequest);
 
         assembled.Position = 0;
-        var blob = await db.Blobs.SingleOrDefaultAsync(x => x.ContentHash == computed, cancellationToken);
+        var blob = await db.Blobs.SingleOrDefaultAsync(x => x.ContentHash == assembledContent.Checksum, cancellationToken);
         if (blob is null)
         {
-            var key = await blobs.SaveAsync(computed, assembled, cancellationToken);
-            blob = BlobObject.Create(computed, session.TotalSize, key);
+            var key = await blobs.SaveAsync(assembledContent.Checksum, assembled, cancellationToken);
+            blob = BlobObject.Create(assembledContent.Checksum, assembledContent.Length, key);
             db.Blobs.Add(blob);
         }
         else
@@ -71,13 +76,11 @@ public sealed class CompleteUploadHandler(
             db.FileNodes.Add(file);
         }
 
-        var version = file.AddVersion(blob.Id, session.TotalSize, session.MimeType, computed, request.UserId);
+        var version = file.AddVersion(blob.Id, assembledContent.Length, session.MimeType, assembledContent.Checksum, request.UserId);
         var scanJob = ProcessingJob.Queue(file.Id, version.Id, ProcessingJobKind.VirusScan);
         db.ProcessingJobs.Add(scanJob);
-        session.Complete(file.Id);
-
-        var user = await db.Users.SingleAsync(x => x.Id == request.UserId, cancellationToken);
         user.Reserve(session.TotalSize);
+        session.Complete(file.Id);
 
         await db.SaveChangesAsync(cancellationToken);
         await chunks.DeleteSessionAsync(session.Id, cancellationToken);

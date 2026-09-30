@@ -1,0 +1,42 @@
+using NetDropbox.Domain;
+
+var passed = 0;
+var failed = 0;
+void Check(bool condition) { if (!condition) throw new Exception("Prediction disagreed"); }
+void Test(string name, Action body)
+{
+    try { body(); passed++; Console.WriteLine($"PASS {name}"); }
+    catch (Exception error) { failed++; Console.WriteLine($"FAIL {name}: {error.Message}"); }
+}
+FileVersion Add(FileNode node) => node.AddVersion(Guid.NewGuid(), 4, "text/plain", new string('a', 64), node.OwnerId);
+Test("restore selects history without appending", () => {
+    var node = FileNode.CreateFile(Guid.NewGuid(), null, "sample");
+    var first = Add(node); Add(node); node.RestoreVersion(first.Id);
+    Check(node.CurrentVersionId == first.Id && node.Versions.Count == 2);
+    Check(Add(node).VersionNumber == 3);
+});
+Test("new version retains earlier text while pending", () => {
+    var node = FileNode.CreateFile(Guid.NewGuid(), null, "sample"); Add(node);
+    node.MarkScanClean("synthetic prior text", "synthetic-thumbnail"); Add(node);
+    Check(node.ScanStatus == FileScanStatus.PendingScan && node.ExtractedText == "synthetic prior text");
+});
+Test("current folder method permits self parent", () => {
+    var node = FileNode.CreateFolder(Guid.NewGuid(), null, "folder");
+    node.Move(node.Id); Check(node.ParentId == node.Id);
+});
+Test("current job method can restart completed job", () => {
+    var job = ProcessingJob.Queue(Guid.NewGuid(), Guid.NewGuid(), (ProcessingJobKind)0);
+    job.MarkRunning(); job.MarkCompleted(); job.MarkRunning();
+    Check(job.Attempts == 2 && job.Status == ProcessingJobStatus.Running);
+});
+Test("share expiry equality is unusable", () => {
+    var expiry = new DateTimeOffset(2030, 1, 1, 0, 0, 0, TimeSpan.Zero);
+    var link = ShareLink.Create(Guid.NewGuid(), "synthetic-lab-token", SharePermission.Download, expiry, null);
+    Check(link.IsUsable(expiry.AddTicks(-1)) && !link.IsUsable(expiry));
+});
+Test("domain Touch does not advance Version", () => {
+    var node = FileNode.CreateFolder(Guid.NewGuid(), null, "before");
+    var version = node.Version; node.Rename("after"); Check(node.Version == version);
+});
+Console.WriteLine($"{passed} passed; {failed} failed");
+Environment.ExitCode = failed == 0 ? 0 : 1;

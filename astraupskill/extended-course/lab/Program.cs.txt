@@ -1,0 +1,38 @@
+using NetDropbox.Domain;
+using NetDropbox.Domain.Common;
+
+int passed = 0, failed = 0;
+var owner = Guid.Parse("00000000-0000-0000-0000-000000000001");
+var hash = new string('a', 64);
+UploadSession Session(long size, int chunk) => UploadSession.Create(owner, null, "sample.bin", size, hash, "application/octet-stream", chunk);
+Check("empty file has one empty chunk", () => {
+    var s = Session(0, 4); Require(s.TotalChunks == 1 && s.ExpectedChunkSize(0) == 0);
+});
+Check("final remainder preserves total", () => {
+    var s = Session(10, 4); Require(s.TotalChunks == 3 && s.ExpectedChunkSize(0) == 4 && s.ExpectedChunkSize(1) == 4 && s.ExpectedChunkSize(2) == 2);
+});
+Check("exact multiple has no extra chunk", () => {
+    var s = Session(8, 4); Require(s.TotalChunks == 2 && s.ExpectedChunkSize(1) == 4);
+});
+Check("raw hash whitespace rejected", () => {
+    Reject(() => UploadSession.Create(owner, null, "file", 1, " " + hash + " ", "x", 1));
+});
+Check("expiry equality is expired", () => {
+    var s = Session(1, 1); Require(s.IsExpired(s.ExpiresAt) && !s.IsExpired(s.ExpiresAt.AddTicks(-1)));
+});
+Check("quota preflight does not reserve", () => {
+    var user = UserStorageAccount.Create("person@example.invalid", "Person", 10);
+    user.EnsureCanReserve(7); Require(user.UsedBytes == 0); user.Reserve(7);
+    Reject(() => user.EnsureCanReserve(4)); Require(user.UsedBytes == 7);
+});
+Console.WriteLine($"{passed} passed; {failed} failed");
+return failed == 0 ? 0 : 1;
+void Check(string name, Action test) {
+    try { test(); passed++; Console.WriteLine("PASS " + name); }
+    catch (Exception e) { failed++; Console.WriteLine("FAIL " + name + ": " + e.Message); }
+}
+static void Require(bool condition) { if (!condition) throw new Exception("Prediction disagreed"); }
+static void Reject(Action action) {
+    bool rejected = false; try { action(); } catch (DomainException) { rejected = true; }
+    Require(rejected);
+}

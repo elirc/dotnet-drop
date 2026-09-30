@@ -86,3 +86,7 @@ npm run build
 ## Notes
 
 The development seeder uses `EnsureCreatedAsync` so Docker/local first-run creates tables immediately. For production-style schema evolution, add an initial EF migration and switch startup to `MigrateAsync`.
+
+## Source-based improvement course
+
+[Start the course](astraupskill/README.md). Follow upload integrity, immutable chunk publication, quota checks, and the limits of each verification boundary.

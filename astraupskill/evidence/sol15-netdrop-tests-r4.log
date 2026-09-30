@@ -1,0 +1,11 @@
+  NetDropbox.Domain -> C:\Users\Owner\Desktop\AstraOrganized2\astra-remaining-improvements\stage\8e9229d5d6ef\src\NetDropbox.Domain\bin\Debug\net8.0\NetDropbox.Domain.dll
+  NetDropbox.Application -> C:\Users\Owner\Desktop\AstraOrganized2\astra-remaining-improvements\stage\8e9229d5d6ef\src\NetDropbox.Application\bin\Debug\net8.0\NetDropbox.Application.dll
+  NetDropbox.Infrastructure -> C:\Users\Owner\Desktop\AstraOrganized2\astra-remaining-improvements\stage\8e9229d5d6ef\src\NetDropbox.Infrastructure\bin\Debug\net8.0\NetDropbox.Infrastructure.dll
+  NetDropbox.Tests -> C:\Users\Owner\Desktop\AstraOrganized2\astra-remaining-improvements\stage\8e9229d5d6ef\tests\NetDropbox.Tests\bin\Debug\net8.0\NetDropbox.Tests.dll
+Test run for C:\Users\Owner\Desktop\AstraOrganized2\astra-remaining-improvements\stage\8e9229d5d6ef\tests\NetDropbox.Tests\bin\Debug\net8.0\NetDropbox.Tests.dll (.NETCoreApp,Version=v8.0)
+VSTest version 17.11.1 (x64)
+
+Starting test execution, please wait...
+A total of 1 test files matched the specified pattern.
+
+Passed!  - Failed:     0, Passed:    22, Skipped:     0, Total:    22, Duration: 10 s - NetDropbox.Tests.dll (net8.0)

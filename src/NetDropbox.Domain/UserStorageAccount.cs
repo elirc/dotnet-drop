@@ -34,10 +34,16 @@ public sealed class UserStorageAccount : Entity
 
     public void Reserve(long bytes)
     {
-        if (bytes < 0) throw new DomainException("Bytes cannot be negative.");
-        if (UsedBytes + bytes > QuotaBytes) throw new DomainException("Storage quota exceeded.");
+        EnsureCanReserve(bytes);
         UsedBytes += bytes;
         Touch();
+    }
+
+    public void EnsureCanReserve(long bytes)
+    {
+        if (bytes < 0) throw new DomainException("Bytes cannot be negative.");
+        if (UsedBytes > QuotaBytes || bytes > QuotaBytes - UsedBytes)
+            throw new DomainException("Storage quota exceeded.");
     }
 
     public void Release(long bytes)
@@ -47,4 +53,3 @@ public sealed class UserStorageAccount : Entity
         Touch();
     }
 }
-

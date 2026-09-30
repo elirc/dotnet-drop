@@ -41,7 +41,7 @@ public sealed class NetDropboxDbContext(DbContextOptions<NetDropboxDbContext> op
             b.Property(x => x.Type).HasConversion<string>().HasMaxLength(32);
             b.Property(x => x.ScanStatus).HasConversion<string>().HasMaxLength(32);
             b.Property(x => x.Version).IsConcurrencyToken();
-            b.HasMany<FileVersion>("_versions")
+            b.HasMany(x => x.Versions)
                 .WithOne()
                 .HasForeignKey(x => x.FileNodeId)
                 .OnDelete(DeleteBehavior.Cascade);
@@ -115,4 +115,3 @@ public sealed class NetDropboxDbContext(DbContextOptions<NetDropboxDbContext> op
         });
     }
 }
-
