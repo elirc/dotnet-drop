@@ -1,5 +1,7 @@
 # J0 — Make `main` build and boot
 
+> **Status (2026-10-06):** half of this ticket is already done on `main`. Commit `9d28a29` fixed the EF `Versions` mapping (`NetDropboxDbContext.cs:44-48`). The missing storage adapters are still missing, and no copy exists on the remote (the incident branches that vendored them were never pushed). The only reference is the *original* `FileSystemChunkStorage` in `astraupskill/snapshots/`. You'll have to write `LocalBlobStorage` and `S3CompatibleBlobStorage` against `IBlobStorage`, and bring `FileSystemChunkStorage` up to the contract the tests in `tests/NetDropbox.Tests/Uploads/FileSystemChunkStorageTests.cs` expect. Questions 1, 2 and 4 are unchanged; for question 3, study the mapping at `d612e0b`.
+
 **Context.** A fresh clone of `main` doesn't compile. Once you get it compiling, the first DB call throws while the EF model is being built. Nobody noticed, because the author's machine had the missing files on disk.
 
 **Ticket.** "Fresh clone → `dotnet build` → `docker compose up` must work. Fix whatever stops it, in the smallest possible diff."

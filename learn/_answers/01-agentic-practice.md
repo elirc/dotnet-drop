@@ -55,4 +55,4 @@ Score each drill out of 10. **The spec is worth 6 points and the review 4.** Age
 - 1 pt: you confirmed that the public-share path now uses the same check, not a second hand-written copy (`ShareService.cs:63` today duplicates the logic).
 
 ## Checklist items graders care most about
-If you ticked "clean-clone build", "provider can prove the claim" and "red on revert" with pasted evidence, you've learned the core of this repo's agentic lesson. Those three are what B01 found missing from the repo's own 47-file `docs/upskill/` curriculum, which describes an app that never compiled ([curriculum 05](../../../opusorganize/apprenticeship/curriculum/05-verify-before-trust.md)).
+If you ticked "clean-clone build", "provider can prove the claim" and "red on revert" with pasted evidence, you've learned the core of this repo's agentic lesson. Those three are what B01 found missing from the repo's own 47-file `docs/upskill/` curriculum, which describes an app that never compiled (*curriculum 05* (external apprenticeship note, not in this repo)).

@@ -8,23 +8,27 @@ Rule for the whole folder: **write your answer first, then open `_answers/`**. S
 NetDropbox is Dropbox-style file storage. It has a .NET 8 API (`src/NetDropbox.Api`), MediatR handlers and services (`src/NetDropbox.Application`), entities (`src/NetDropbox.Domain`), EF Core + Postgres + blob storage + two background workers (`src/NetDropbox.Infrastructure`), and a React SPA (`web/src/App.tsx`, `web/src/api.ts`).
 It's in the portfolio because one upload touches three stores with no shared transaction: the chunk folder, the blob store and Postgres (`CompleteUpload.cs:45-84`). That's the richest consistency, authorization and accounting material in the B01 .NET group.
 
-## Known state of main (read before you try to run anything)
-- **`main` does not build from a clean clone.** `.gitignore:8` (`storage/`) also matches `src/NetDropbox.Infrastructure/Storage/`, so the storage adapters were never committed (batch1report, netdrop §5).
-- **The EF model throws on first use.** `NetDropboxDbContext.cs:44` maps `"_versions"` while `:48` maps the `Versions` navigation to the same field (verified by execution in B01 with a scratch console).
-- **Ladder J0 fixes both** (`training/ladder/J0-make-main-build.md`). Incident branches carry an extra commit that vendors the adapters, so they build (all 5 verified in B01 with SDK 10.0.302 targeting net8.0).
-- The test project (`tests/NetDropbox.Tests/NetDropbox.Tests.csproj`) references only Domain and Application, not Infrastructure. The 6 domain tests *should* therefore build on `main` without J0. This pass did not run them, so treat that as **UNVERIFIED**. B01 ran them 6/6 on the INC-001 branch with `DOTNET_ROLL_FORWARD=Major`.
-- Your working tree has uncommitted Astra upload-integrity changes (15 files). Never switch branches in it. Use `git worktree` for everything (see `training/incidents/README.md`).
+## Known state of the repo (re-checked 2026-10-06 on a fresh clone; read before you try to run anything)
+This guide was written against the original source at commit **`d612e0b`**, and every `file:line` reference in it points there unless it says otherwise. Since then `main` gained one more source commit (`9d28a29`, the Astra upload-integrity change described in `astraupskill/`). Here is what that means for you:
+
+- **`main` still does not build from a clean clone.** `.gitignore:8` (`storage/`) also matches `src/NetDropbox.Infrastructure/Storage/` on case-insensitive filesystems, so the three storage adapters (`FileSystemChunkStorage`, `LocalBlobStorage`, `S3CompatibleBlobStorage`) were never committed. `DependencyInjection.cs:31,45,52` references them, so the build fails with CS0246. `git check-ignore -v src/NetDropbox.Infrastructure/Storage/LocalBlobStorage.cs` still prints `.gitignore:8:storage/`.
+- **No copy of those adapters exists anywhere on the remote.** The only trace is the *original* `FileSystemChunkStorage` in `astraupskill/snapshots/src__NetDropbox.Infrastructure__Storage__FileSystemChunkStorage.cs.original.txt`. `LocalBlobStorage` and `S3CompatibleBlobStorage` have to be written from the `IBlobStorage` interface (`src/NetDropbox.Application/Abstractions/IBlobStorage.cs`). J0 is therefore a "write the missing adapters" ticket now, not a "vendor them" ticket.
+- **The EF mapping half of J0 is already fixed on `main`.** `NetDropboxDbContext.cs:44-48` now maps `HasMany(x => x.Versions)` with field access, which is exactly the fix `training/_answers/ladder-J0.md` describes. At `d612e0b` the model still throws.
+- **On `main`, even the tests don't build without the adapters.** The test project now references Infrastructure, and `tests/NetDropbox.Tests/Uploads/FileSystemChunkStorageTests.cs` instantiates `FileSystemChunkStorage`. Counted by attribute, `main` has **22 test cases** (21 methods: 20 `[Fact]` + one `[Theory]` × 2), recorded passing on the author's machine where the adapters existed on disk (`astraupskill/evidence/sol15-netdrop-tests-r4.log`). At `d612e0b`, the test project references only Domain and Application and has **6** domain tests, so a worktree from `d612e0b` is the one place a fresh clone can run tests without writing code first. (Not run in this re-check.)
+- **The training incident branches were never pushed.** `git branch -r` on a fresh clone shows only `origin/main`; none of the five `training/incidents/NNN-*` branches (or their adapter-vendoring commits) exist on the remote. Sessions 7-9, and drills A and B in `01-agentic-practice.md`, can't be done as written: you can read the briefs and write hypotheses, but there's no diff to bisect and no branch to test against. See the status note in `training/incidents/README.md`.
+- The "15 uncommitted Astra files" warning from earlier versions of this guide is obsolete: that work is committed in `9d28a29`. You still should use `git worktree` for exercises, but there's nothing uncommitted to protect in a fresh clone.
+- Links marked *(external apprenticeship note, not in this repo)* point to a separate curriculum in the author's workspace. They aren't available from a clone; the exercises here don't depend on them.
 
 ## Prerequisites
 You need these first. Each points at a central page or at a file in this repo to read.
 1. **C# classes, private setters, and exceptions as control flow.** Read `src/NetDropbox.Domain/UserStorageAccount.cs` and `src/NetDropbox.Domain/FileNode.cs` until you can say what every method guards. On-ramp exercises 1 and 3 check this.
 2. **The ASP.NET request pipeline: controller → service/handler → middleware → HTTP status.** Read `src/NetDropbox.Api/Program.cs:76-96` and `src/NetDropbox.Api/Support/ExceptionMiddleware.cs`. On-ramp exercise 2 checks this.
-3. **EF Core basics: DbContext, SaveChanges as the unit of work, indexes and FKs in `OnModelCreating`.** Read `src/NetDropbox.Infrastructure/Persistence/NetDropboxDbContext.cs`. Then read [10 query plans and indexes](../../opusorganize/apprenticeship/curriculum/10-query-plans-and-indexes.md) (sections on N+1 and projections).
-4. **Check-then-act races and why an in-memory check isn't a lock.** [03 concurrency races](../../opusorganize/apprenticeship/curriculum/03-concurrency-races.md).
-5. **Dual writes and the outbox (what happens between "DB committed" and "queue got the message").** [01 transactional outbox](../../opusorganize/apprenticeship/curriculum/01-transactional-outbox.md) and [02 idempotency](../../opusorganize/apprenticeship/curriculum/02-idempotency.md).
-6. **Verifying code you didn't write.** [05 verify before trust](../../opusorganize/apprenticeship/curriculum/05-verify-before-trust.md). This repo is its best example: a 47-file curriculum in `docs/upskill/` describes an app that doesn't compile.
+3. **EF Core basics: DbContext, SaveChanges as the unit of work, indexes and FKs in `OnModelCreating`.** Read `src/NetDropbox.Infrastructure/Persistence/NetDropboxDbContext.cs`. Then read *10 query plans and indexes* (external apprenticeship note, not in this repo) (sections on N+1 and projections).
+4. **Check-then-act races and why an in-memory check isn't a lock.** *03 concurrency races* (external apprenticeship note, not in this repo).
+5. **Dual writes and the outbox (what happens between "DB committed" and "queue got the message").** *01 transactional outbox* (external apprenticeship note, not in this repo) and *02 idempotency* (external apprenticeship note, not in this repo).
+6. **Verifying code you didn't write.** *05 verify before trust* (external apprenticeship note, not in this repo). This repo is its best example: a 47-file curriculum in `docs/upskill/` describes an app that doesn't compile.
 
-Optional warm-up repos, earlier in the B01 chain: `Desktop\.netramp\learn\` (smallest app, characterization tests) and `Desktop\netauth\learn\` (JWT and auth basics that INC-005 builds on).
+Optional warm-up repos, earlier in the B01 chain: the `.netramp` and `netauth` (published as `dotnet-auth`) repos' `learn/` or `training/` folders (smallest app and characterization tests; JWT and auth basics that INC-005 builds on).
 
 ## Study route
 Eleven sessions, about 13 hours in total, before the long mid/senior ladder. Every session ends with an exit criterion you can check. "Do by hand" means no agent: this is the thinking you're here to learn. "Delegate, then verify" means an agent may type, but you must check its work against the named evidence.
@@ -48,7 +52,7 @@ Eleven sessions, about 13 hours in total, before the long mid/senior ladder. Eve
 - **Exit criterion:** you can list the side effects of `CompleteUploadHandler.Handle` in order and say which ones survive a crash, then compare with `learn/_answers/00-onramp.md` #5.
 
 ### Session 4 — Your first test, and J0 (90 min)
-- **Files/branches:** `tests/NetDropbox.Tests/Domain/*.cs`, `training/ladder/J0-make-main-build.md`. Work in a worktree: `git worktree add ../netdrop-j0 -b training/ladder/j0 main`.
+- **Files/branches:** `tests/NetDropbox.Tests/Domain/*.cs`, `training/ladder/J0-make-main-build.md`. Work in a worktree: `git worktree add ../netdrop-j0 -b training/ladder/j0 main` (J0 targets current `main`; see "Known state" above for what's left to fix there).
 - **Do by hand:** on-ramp exercise 6 (one characterization test). Then answer J0's four "Explain before touching" questions in writing *before* any edit.
 - **Delegate, then verify:** let an agent make the J0 diff. Verify it yourself: `git check-ignore -v src/NetDropbox.Infrastructure/Storage/LocalBlobStorage.cs` prints nothing, the build passes **in a fresh clone** (not the agent's tree), and the model-builds test exists and fails when you revert the `NetDropboxDbContext.cs` change.
 - **Exit criterion:** `dotnet build src/NetDropbox.Api/NetDropbox.Api.csproj` passes on a clean clone of your branch, and your characterization test passes. Compare with `training/_answers/ladder-J0.md` and `learn/_answers/00-onramp.md` #6.
@@ -67,19 +71,19 @@ Eleven sessions, about 13 hours in total, before the long mid/senior ladder. Eve
 
 ### Session 7 — Incidents 004 and 003 (90 min)
 - **Files/branches:** `training/incidents/004-slow-folder-listing.md` and `003-shared-download-exposure.md`; branches `training/incidents/004-slow-folder-listing` and `training/incidents/003-shared-download-exposure` (open them in worktrees).
-- **Do by hand:** hypothesis list before opening the diff; diagnosis; postmortem. Read [10 query plans](../../opusorganize/apprenticeship/curriculum/10-query-plans-and-indexes.md) for 004.
+- **Do by hand:** hypothesis list before opening the diff; diagnosis; postmortem. Read *10 query plans* (external apprenticeship note, not in this repo) for 004.
 - **Delegate, then verify:** the regression test only (query-count test for 004, authorization-matrix test for 003). Use drill A and drill B in `learn/01-agentic-practice.md`.
 - **Exit criterion:** each regression test fails on the incident branch and passes after your fix. Your postmortem names the root cause stated in `training/_answers/incident-00N.md`.
 
 ### Session 8 — Incident 001 and ladder M1 via the agentic exercise (90 min, then continue)
 - **Files/branches:** `training/incidents/001-quota-meter-drift.md`, branch `training/incidents/001-quota-meter-drift`, `training/agentic/EXERCISE.md`.
-- **Do by hand:** INC-001 diagnosis. Then Step 1 of the agentic exercise: the M1 SPEC.md with its failure matrix. Read [02 idempotency](../../opusorganize/apprenticeship/curriculum/02-idempotency.md) and [03 concurrency](../../opusorganize/apprenticeship/curriculum/03-concurrency-races.md) first.
+- **Do by hand:** INC-001 diagnosis. Then Step 1 of the agentic exercise: the M1 SPEC.md with its failure matrix. Read *02 idempotency* (external apprenticeship note, not in this repo) and *03 concurrency* (external apprenticeship note, not in this repo) first.
 - **Delegate, then verify:** Steps 2–5 of `training/agentic/EXERCISE.md` (implementer, adversarial reviewer, revision, `VERIFY_CHECKLIST.md`).
 - **Exit criterion:** a concurrency test that ran against Postgres (Testcontainers start lines in the output) or an explicit "not executed" note, plus an EXPLAIN.md scored with `training/_answers/agentic-rubric.md`.
 
 ### Session 9 — Incidents 002 and 005 (90 min)
 - **Files/branches:** `training/incidents/002-scan-backlog.md`, `005-staging-token-anomaly.md` and their branches.
-- **Do by hand:** diagnosis and postmortems. For 005, trace config layering yourself. Read [14 load and back-pressure](../../opusorganize/apprenticeship/curriculum/14-load-backpressure-timeouts.md) for 002.
+- **Do by hand:** diagnosis and postmortems. For 005, trace config layering yourself. Read *14 load and back-pressure* (external apprenticeship note, not in this repo) for 002.
 - **Delegate, then verify:** drill C in `learn/01-agentic-practice.md` (fail-closed config for 005).
 - **Exit criterion:** you can explain without notes why "restart the pod" makes INC-002 worse, and why INC-005's alert self-resolving was the dangerous part.
 
@@ -103,4 +107,4 @@ Eleven sessions, about 13 hours in total, before the long mid/senior ladder. Eve
 - You can explain, without notes, the three things this repo teaches best: dual writes (`CompleteUpload.cs:82-84`), owner predicates as the only access control (`FileService.cs:143-147`, INC-003), and inert concurrency tokens (`Entity.cs:8`).
 
 ## Next repo
-**netintercom** (`Desktop\netintercom\learn\`). It adds realtime (SignalR), multi-replica background jobs and a second frontend, on the same Api/Application/Domain/Infrastructure shape you just learned. B01 chain: .netramp → .netstripe → netauth → **netdrop** → netintercom → modular-monolith-with-ddd → eShop → gitvg/atlas (B02).
+**netintercom** (its `learn/` folder). It adds realtime (SignalR), multi-replica background jobs and a second frontend, on the same Api/Application/Domain/Infrastructure shape you just learned. B01 chain: .netramp → .netstripe → netauth → **netdrop** → netintercom → modular-monolith-with-ddd → eShop → gitvg/atlas (B02).

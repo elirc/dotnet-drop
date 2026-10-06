@@ -5,9 +5,11 @@ Each drill turns an existing `training/` item into practice at directing an agen
 2. **An agent** implements it in a worktree.
 3. **You** review adversarially against the checklist at the bottom, then against the sealed rubric in `learn/_answers/01-agentic-practice.md`.
 
-Background: [05 verify before trust](../../opusorganize/apprenticeship/curriculum/05-verify-before-trust.md). The long-form version of this loop, on ladder M1, is `training/agentic/EXERCISE.md`. Do these drills first, then that one.
+Background: *05 verify before trust* (external apprenticeship note, not in this repo). The long-form version of this loop, on ladder M1, is `training/agentic/EXERCISE.md`. Do these drills first, then that one.
 
-Setup for every drill: `git worktree add ../netdrop-drill-X <branch>` from `C:\Users\Owner\Desktop\netdrop`. Never let an agent work in your main tree, because it holds uncommitted Astra changes.
+Setup for every drill: `git worktree add ../netdrop-drill-X <branch>` from your clone. Never let an agent work in your main tree.
+
+> **Status (2026-10-06):** the incident branches that drills A and B start from (`training/incidents/003-*`, `004-*`) were never pushed. A fresh clone has only `origin/main`. You can still write each drill's spec (the "You write" part is the skill being trained), but the "must FAIL on the incident branch" verification can't be done. Drill C targets `main` and is fully doable. Its fix doesn't need the incident branch. Note that `main` itself won't build until the storage adapters are written (`learn/README.md`, "Known state").
 
 ---
 
@@ -19,7 +21,7 @@ Setup for every drill: `git worktree add ../netdrop-drill-X <branch>` from `C:\U
 - what it counts or inspects (commands? SQL text? columns?)
 - which database provider it runs on, and **why that provider can prove the thing**
 - the seed size and the exact assertion threshold
-- where the file goes (`tests/NetDropbox.Tests/...`) and which project references it needs that the test project lacks today (`NetDropbox.Tests.csproj` references only Domain and Application).
+- where the file goes (`tests/NetDropbox.Tests/...`) and which project references it needs that the test project lacks (at `d612e0b` it references only Domain and Application; on current `main` it already references Infrastructure).
 
 **Agent does:** writes the test and any helper (interceptor, fixture). Paste your spec verbatim, and add: "Run the test on this branch and paste the real output. It must FAIL here."
 
@@ -69,5 +71,5 @@ Use `training/agentic/VERIFY_CHECKLIST.md` in full. These are the NetDropbox-spe
 - [ ] **The concurrency token is real.** If the agent says "optimistic concurrency", it must be `xmin`/`IsRowVersion()` or explicit increments. `IsConcurrencyToken()` on `Entity.Version` is inert (`Entity.cs:8`).
 - [ ] **The side effects after `SaveChangesAsync` are accounted for.** Any change to `CompleteUpload.cs` says what happens on a crash between `:82` and `:84`.
 - [ ] **Both token sites.** Anything touching JWT changes issuing (`AuthController.cs:30-45`) and validation (`Program.cs:41-57`) together.
-- [ ] **Your working tree is untouched.** `git -C C:\Users\Owner\Desktop\netdrop status --short` shows the same 15 Astra entries as before.
+- [ ] **Your working tree is untouched.** `git status --short` in your main clone shows the same entries as before the drill (empty, on a fresh clone).
 - [ ] **Red on revert.** Every new test fails when you revert the production change. Paste both outputs.

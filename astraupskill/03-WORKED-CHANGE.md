@@ -8,9 +8,35 @@ At completion, the handler checks index coverage and quota before assembling. Th
 
 The new fresh-context handler tests initially exposed a separate production mapping problem: the Versions property and an explicitly named backing-field relationship both attempted to use the same field. Mapping HasMany through Versions and retaining field access resolves that model validation conflict. This is part of the delivered repair, not a test-only bypass. Compare each changed file with its saved original, then explain why validation, temporary publication, graph mutation, and post-commit work occur in their current order. A successful review should account for the failure path at every step, including the steps outside database ownership.
 
+## Before → after, by file
+
+Each changed file's original is saved in [`snapshots/`](snapshots/) and is byte-identical to
+commit `d612e0b`, so `git diff d612e0b 9d28a29 -- src` shows the same change.
+
+| File | Before (`d612e0b`) | After (`main`) |
+| --- | --- | --- |
+| [`UploadSession.cs`](../src/NetDropbox.Domain/UploadSession.cs) | `Math.Ceiling(totalSize / (double)chunkSize)` cast to `int`; any non-blank hash accepted; `Complete`/`Expire` callable in any state | integer ceiling with an `int.MaxValue` guard (lines 42-44); `IsSha256` (line 40); `EnsureOpen` on transitions; new `ExpectedChunkSize` (66-73) |
+| [`UserStorageAccount.cs`](../src/NetDropbox.Domain/UserStorageAccount.cs) | `UsedBytes + bytes > QuotaBytes`, which can overflow | `EnsureCanReserve` compares against remaining capacity by subtraction and mutates nothing (42-47); `Reserve` calls it (35-40) |
+| [`UploadChunk.cs`](../src/NetDropbox.Application/Uploads/UploadChunk.cs) | storage wrote the final path first, then the handler compared checksums | changed-duplicate check before storage (40-47); expected size passed to storage (57); conflict → 409 (60-63) |
+| [`CompleteUpload.cs`](../src/NetDropbox.Application/Uploads/CompleteUpload.cs) | hash checked, declared length trusted; quota reserved after the blob write | preflight (46) → assemble → length (50) → digest (52) → blob → graph → reserve → one save (85) |
+| [`Hashing.cs`](../src/NetDropbox.Application/Common/Hashing.cs) | returned a hash string | returns `HashedContent(Checksum, Length)` (line 24) |
+| [`IChunkStorage.cs`](../src/NetDropbox.Application/Abstractions/IChunkStorage.cs) | no expected size, no conflict type | `StoreAsync(..., expectedSize, ...)`, `StoredChunk.Committed`, `ChunkWriteConflictException` |
+| [`NetDropboxDbContext.cs`](../src/NetDropbox.Infrastructure/Persistence/NetDropboxDbContext.cs) | `HasMany<FileVersion>("_versions")` plus `Navigation(x => x.Versions)` on the same field, so the model throws | `HasMany(x => x.Versions)` + field access (44-48) |
+| `Storage/FileSystemChunkStorage.cs` | in `snapshots/` only | **not committed**, so you can't diff it |
+
+**Exercise.** *Goal:* verify one row of the table yourself instead of trusting it.
+Run `git diff d612e0b 9d28a29 -- src/NetDropbox.Domain/UserStorageAccount.cs` and find a
+pair of `long` values for which the *old* check passes when it should fail. **Check:** with
+`QuotaBytes = 10`, `UsedBytes = 8`, `bytes = long.MaxValue`, the old `8 + long.MaxValue`
+wraps negative, so `> 10` is false and the reservation is *accepted*. The new
+`bytes > QuotaBytes - UsedBytes` (`long.MaxValue > 2`) rejects it.
+`Reserve_rejects_overflow_without_changing_usage`
+([`UserStorageAccountTests.cs:20-31`](../tests/NetDropbox.Tests/Domain/UserStorageAccountTests.cs#L20-L31))
+pins the new behavior.
+
 ## Source excerpt
 
-From [src/NetDropbox.Infrastructure/Storage/FileSystemChunkStorage.cs](../src/NetDropbox.Infrastructure/Storage/FileSystemChunkStorage.cs).
+From `src/NetDropbox.Infrastructure/Storage/FileSystemChunkStorage.cs`, as it existed in the author's working copy. **This file is not in git** (see [README](README.md)), so the excerpt below can't be checked against the repository. The committed original is in [`snapshots/`](snapshots/src__NetDropbox.Infrastructure__Storage__FileSystemChunkStorage.cs.original.txt).
 
 ```cs
 var accepted = total == expectedSize &&

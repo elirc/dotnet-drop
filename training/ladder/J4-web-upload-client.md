@@ -30,7 +30,7 @@
 - A module-level `onUnauthorized` callback in `api.ts` that `App` registers is enough. You don't need a context provider.
 - `download()` (`App.tsx:293-301`) revokes the object URL immediately after `click()`. Note it in your PR description even if you don't fix it.
 - `vitest` + `@testing-library/react` + `jsdom`; stub `globalThis.fetch` with `vi.fn()`.
-- See [curriculum 12, frontend performance](../../../opusorganize/apprenticeship/curriculum/12-frontend-performance.md) for how to measure question 3 instead of guessing.
+- See *curriculum 12, frontend performance* (external apprenticeship note, not in this repo) for how to measure question 3 instead of guessing.
 </details>
 
 Answer: `training/_answers/ladder-J4.md`

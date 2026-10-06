@@ -8,6 +8,34 @@ CompleteUploadHandler first checks that every required index exists. UserStorage
 
 NetDropboxDbContext maps those domain objects. The FileNode.Versions relationship now uses the public navigation with field access, avoiding two mappings to the same backing field. The tests live under NetDropbox.Tests: domain cases validate arithmetic and lifecycle, filesystem cases use real temporary directories, and upload handler cases reopen an InMemory database to inspect committed state. Trace ownership before changing code: a digest helper cannot authorize a user, a filesystem rename cannot commit database rows, and a queue acknowledgement cannot undo an already saved file version. Each layer contributes a specific guarantee.
 
+## Line map (current `main`)
+
+| Rule | Owner | Where |
+| --- | --- | --- |
+| hash must be 64 hex chars; chunk count rounds up without overflow; zero bytes = 1 chunk | `UploadSession.Create` | [`UploadSession.cs:34-46`](../src/NetDropbox.Domain/UploadSession.cs#L34-L46) |
+| per-index expected length (last chunk = remainder) | `UploadSession.ExpectedChunkSize` | [`UploadSession.cs:66-73`](../src/NetDropbox.Domain/UploadSession.cs#L66-L73) |
+| session lookup is owner-scoped; open + not expired; index in range | `UploadChunkHandler` | [`UploadChunk.cs:31-38`](../src/NetDropbox.Application/Uploads/UploadChunk.cs#L31-L38) |
+| different checksum at an accepted index → 409 *before* storage | `UploadChunkHandler` | [`UploadChunk.cs:40-47`](../src/NetDropbox.Application/Uploads/UploadChunk.cs#L40-L47) |
+| storage conflict → 409; not committed → 400 with size-vs-checksum reason | `UploadChunkHandler` | [`UploadChunk.cs:49-70`](../src/NetDropbox.Application/Uploads/UploadChunk.cs#L49-L70) |
+| chunk row written only after storage committed, only if absent | `UploadChunkHandler` | [`UploadChunk.cs:72-76`](../src/NetDropbox.Application/Uploads/UploadChunk.cs#L72-L76) |
+| exact index set `0..TotalChunks-1` | `CompleteUploadHandler` | [`CompleteUpload.cs:36-43`](../src/NetDropbox.Application/Uploads/CompleteUpload.cs#L36-L43) |
+| read-only quota preflight | `UserStorageAccount.EnsureCanReserve` | [`CompleteUpload.cs:45-46`](../src/NetDropbox.Application/Uploads/CompleteUpload.cs#L45-L46), [`UserStorageAccount.cs:42-47`](../src/NetDropbox.Domain/UserStorageAccount.cs#L42-L47) |
+| assembled length, then digest | `CompleteUploadHandler` + `Hashing` | [`CompleteUpload.cs:48-53`](../src/NetDropbox.Application/Uploads/CompleteUpload.cs#L48-L53), [`Hashing.cs:7`](../src/NetDropbox.Application/Common/Hashing.cs#L7) |
+| blob find-or-create (only external write) | `CompleteUploadHandler` | [`CompleteUpload.cs:55-66`](../src/NetDropbox.Application/Uploads/CompleteUpload.cs#L55-L66) |
+| file node, version, scan job, reserve, complete, then **one** save | `CompleteUploadHandler` | [`CompleteUpload.cs:68-85`](../src/NetDropbox.Application/Uploads/CompleteUpload.cs#L68-L85) |
+| after the save: delete chunks, enqueue (in-memory channel) | `CompleteUploadHandler` | [`CompleteUpload.cs:86-87`](../src/NetDropbox.Application/Uploads/CompleteUpload.cs#L86-L87) |
+| one row per `(UploadSessionId, Index)` | database | [`NetDropboxDbContext.cs:80`](../src/NetDropbox.Infrastructure/Persistence/NetDropboxDbContext.cs#L80) |
+| temp-file publish, non-overwriting move, conflict on different bytes | `FileSystemChunkStorage` | **not in git**, see the status note in [README](README.md) |
+
+**Exercise.** *Goal:* find where a concurrency guarantee actually comes from. Two first
+requests for the same index, with *identical* bytes, both pass line 43 (`existing` is null),
+both get `Committed = true` from storage, and both reach line 74. What stops a second
+`UploadChunk` row? **Check:** the unique index at `NetDropboxDbContext.cs:80`. The loser's
+`SaveChangesAsync` (line 75) throws a `DbUpdateException`, which the API returns as a 500
+because `ExceptionMiddleware` only maps `AppException` to its own status. So the *data* is
+safe and the *response* is wrong. Chapter 4 explains why the InMemory handler tests can't
+show you this.
+
 ## Source excerpt
 
 From [src/NetDropbox.Application/Abstractions/IChunkStorage.cs](../src/NetDropbox.Application/Abstractions/IChunkStorage.cs).

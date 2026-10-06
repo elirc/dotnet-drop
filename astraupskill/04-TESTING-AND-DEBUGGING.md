@@ -8,6 +8,36 @@ Use real filesystem tests for publication behavior. FileSystemChunkStorageTests 
 
 Use handler tests for orchestration. UploadHandlerTests supplies fake chunk/blob/queue ports but the actual application handlers and EF context model. It reopens the same named InMemory database to inspect usage, file versions, blobs, jobs, and session state after operations. That proves the handler saved the expected graph in this fixture; it does not prove relational uniqueness, SQL rollback, or competing database writers. Avoid seeding the same chunk twice: InMemory does not enforce the SQL unique index, so a duplicated fixture can fail SingleOrDefault before reaching the intended behavior. Preserve the distinction between fixture mistakes and application defects in your debugging notes.
 
+## The 22 test cases, by boundary
+
+20 `[Fact]` + one `[Theory]` with 2 `[InlineData]` rows = 22 cases in 21 methods, matching the
+recorded run.
+
+| File | Cases | Boundary | Builds from a clean clone? |
+| --- | --- | --- | --- |
+| [`Domain/FileNodeTests.cs`](../tests/NetDropbox.Tests/Domain/FileNodeTests.cs) | 3 | pure domain | only if the project builds (see below) |
+| [`Domain/UploadSessionTests.cs`](../tests/NetDropbox.Tests/Domain/UploadSessionTests.cs) | 7 (5 facts + theory × 2) | pure domain: rounding (9), invalid hashes (29-37), unrepresentable count (40), exact remainder (55), terminal transitions (67) | same |
+| [`Domain/UserStorageAccountTests.cs`](../tests/NetDropbox.Tests/Domain/UserStorageAccountTests.cs) | 3 | pure domain: quota (9), overflow (21), preflight doesn't mutate (33) | same |
+| [`Uploads/FileSystemChunkStorageTests.cs`](../tests/NetDropbox.Tests/Uploads/FileSystemChunkStorageTests.cs) | 4 | real temp files | **no:** the class under test isn't in git |
+| [`Uploads/UploadHandlerTests.cs`](../tests/NetDropbox.Tests/Uploads/UploadHandlerTests.cs) | 5 | real handlers + EF InMemory + fakes (`FakeChunkStorage` line 230, `FakeBlobStorage` line 266) | same |
+
+Because the one test project references Infrastructure, and Infrastructure references the
+uncommitted adapters, **none** of the 22 compile on a fresh clone of `main`. CI
+([`ci.yml`](../.github/workflows/ci.yml)) would fail at the build step. Note that it builds
+only the API project and then runs `dotnet test ... --no-build`, so the test project is
+never built in CI at all, which is a second, independent problem. To run the domain tests
+before J0, use a worktree at `d612e0b` (6 older domain tests).
+
+**Exercise.** *Goal:* tie one test to the ordering claim it protects. Open
+`Complete_late_quota_failure_happens_before_external_write`
+([`UploadHandlerTests.cs:34-53`](../tests/NetDropbox.Tests/Uploads/UploadHandlerTests.cs#L34-L53)).
+**Check:** name the production line that must come *before* the blob write for this test
+to pass (`CompleteUpload.cs:46`, `EnsureCanReserve`), and the assertions that would catch a
+regression that moved it after the blob write at line 59: `fixture.Chunks.OpenCount.Should().Be(0)`
+and `fixture.Blobs.SaveCount.Should().Be(0)` (lines 50-51). Without call-count assertions
+on the fakes, a test like this only proves *that* it failed, not *where*. That's the
+difference between asserting an outcome and asserting an ordering.
+
 ## Source excerpt
 
 From [tests/NetDropbox.Tests/Uploads/UploadHandlerTests.cs](../tests/NetDropbox.Tests/Uploads/UploadHandlerTests.cs).

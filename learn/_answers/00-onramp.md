@@ -2,7 +2,7 @@ SEALED — attempt first. Open this only after you've written your own answers t
 
 # Answers: NetDropbox on-ramp
 
-Line numbers are for committed `main`.
+Line numbers are for `d612e0b`, the original source the on-ramp targets (see the status note in `learn/00-onramp.md`).
 
 ## 1. Quota meter
 - `Create` trims and lower-cases the email (`UserStorageAccount.cs:11`), so (d) prints `a@example.com`.
@@ -18,7 +18,7 @@ Line numbers are for committed `main`.
 3. The exception bubbles out of MVC into `ExceptionMiddleware.InvokeAsync` (`ExceptionMiddleware.cs:15`). `:19` maps `AppException` to its status, **409**. No error log, because status < 500 (`:25`). `:26-34` writes ProblemDetails with `Title` and `Detail` both set to the message.
 4. `web/src/api.ts:74-76`: `response.ok` is false → parse the JSON → `throw new ApiError(problem.detail ?? problem.title ...)` → the user sees **"A node with that name already exists."**
 - `CorrelationIdMiddleware` runs first (`Program.cs:78`) but doesn't change the status.
-- **Bonus:** yes, two folders can be created. It's a check-then-act race: both requests run `AnyAsync` before either commits, and both insert. The index at `NetDropboxDbContext.cs:38` is **not unique** (no `.IsUnique()`), so the database doesn't stop it. It also includes `IsDeleted`, so even a unique version would need care (a partial unique index `WHERE NOT is_deleted`). That's ladder J3 and [curriculum 03](../../../opusorganize/apprenticeship/curriculum/03-concurrency-races.md).
+- **Bonus:** yes, two folders can be created. It's a check-then-act race: both requests run `AnyAsync` before either commits, and both insert. The index at `NetDropboxDbContext.cs:38` is **not unique** (no `.IsUnique()`), so the database doesn't stop it. It also includes `IsDeleted`, so even a unique version would need care (a partial unique index `WHERE NOT is_deleted`). That's ladder J3 and *curriculum 03* (external apprenticeship note, not in this repo).
 
 ## 3. The Move guard
 - (a) **No.** Line 46 only fires if a *file* is moved into a parent whose id equals its own id. But `MoveAsync` loads the parent and rejects anything that isn't a folder (`FileService.cs:58`), and a file's id can never be a folder's id. For this path the domain guard is dead code: it looks like protection and protects nothing.
@@ -53,7 +53,7 @@ Line numbers are for committed `main`.
   - **`:83`** chunk files deleted (file system).
   - **`:84`** message enqueued into the in-memory `Channel`.
 - (b) Inside the transaction: every *tracked* change (`:56/60, 71, 74, 76, 77, 80`). Before it: the blob write (`:54`). After it: chunk deletion (`:83`) and the enqueue (`:84`). Three stores, one transaction that covers only one of them.
-- (c) The chunk files stay on disk forever: the janitor only cleans chunks for **Open** expired sessions (`JanitorWorker.cs:37-44`), and this session is Completed. The message is never enqueued, so the file stays `PendingScan` forever and every download returns 409 (`FileService.cs:152`). The `processing_jobs` row says `Queued`, which is false: nothing reads that table back (`grep -rn ProcessingJobs src` shows only writes and the worker's lookup by id). This is the dual-write gap that ladder S1 and [curriculum 01](../../../opusorganize/apprenticeship/curriculum/01-transactional-outbox.md) address.
+- (c) The chunk files stay on disk forever: the janitor only cleans chunks for **Open** expired sessions (`JanitorWorker.cs:37-44`), and this session is Completed. The message is never enqueued, so the file stays `PendingScan` forever and every download returns 409 (`FileService.cs:152`). The `processing_jobs` row says `Queued`, which is false: nothing reads that table back (`grep -rn ProcessingJobs src` shows only writes and the worker's lookup by id). This is the dual-write gap that ladder S1 and *curriculum 01* (external apprenticeship note, not in this repo) address.
 - (d) An **orphan blob**: bytes in the store with no `blobs` row. No code lists the store to find orphans. The next upload of the same content saves again, probably to the same hash-derived key (UNVERIFIED: the adapter isn't in `main`'s git).
 
 ## 6. Characterization test (reference)
@@ -78,7 +78,7 @@ public sealed class BlobObjectTests
 - Grading: the names describe *behavior*, there is one behavior per test, and the test goes red when you mutate the line it pins.
 - Zero-byte uploads: the client (`App.tsx:275`) will try to send chunk 0 as an empty slice, and the server requires indexes 0..TotalChunks-1 (`CompleteUpload.cs:42`), so one chunk is consistent. **Keep** it. It's a product question ("do we allow empty files?") to confirm with whoever owns the upload API. Never "fix" a characterized behavior without asking.
 - Silent clamping in `RemoveReference` at 0 is the same smell as `Release` in #1. Pin it now, and question it in M4.
-- Whether this suite builds on `main` without J0 is UNVERIFIED. The test project references only Domain and Application, so it should.
+- At `d612e0b` the test project references only Domain and Application, so this suite should build there without J0 (not executed in the 2026-10-06 re-check). On current `main` it does **not**: the test project now references Infrastructure, which needs the missing storage adapters.
 
 ## 7. Resume edge cases
 - (a) An upper-case hash never matches the stored lower-case value, so every "resume" creates a **new** session and re-uploads everything. The comparison should normalize the request (`Trim().ToLowerInvariant()`) the same way the entity does. The real client emits lower-case hex (`api.ts:163`, `toString(16)`), so this doesn't happen today. It will bite the first other client (a CLI or mobile app). The lesson: normalization rules must be applied at *every* comparison, not only at creation.

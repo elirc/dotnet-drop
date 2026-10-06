@@ -1,5 +1,7 @@
 # NetDropbox incidents
 
+> **Status (checked 2026-10-06): none of the five branches below exists on the remote.** A fresh clone of `github.com/elirc/dotnet-drop` has only `origin/main`. The briefs are intact and the sealed answers in `training/_answers/incident-00N.md` describe each root cause, so you can still practice the *diagnosis* half: read the alert, logs and metrics, write a ranked hypothesis list, then predict the bad diff. But you can't `git diff` the suspect PR or run a failing regression test until someone recreates and pushes the branches. The `git -C ... worktree add` command below also uses an absolute path from the author's machine. Run `git worktree add ../netdrop-inc-001 <branch>` from your own clone instead, once branches exist.
+
 Five on-call scenarios. Each one is a real bug committed on its own branch. The brief (`NNN-*.md`) shows what on-call would see: the alert, some logs, a metrics excerpt and the PR that shipped just before the symptom started. The cause is not stated anywhere outside `training/_answers/`.
 
 | # | Branch | Brief |

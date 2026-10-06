@@ -46,4 +46,6 @@ The recorded test runs passed **22 tests**. The commands below define the verifi
 
 | Check | Exact command arguments | Exit | Evidence |
 |---|---|---:|---|
-| `sol15-netdrop-tests-r4` | `["C:\\Users\\Owner\\Desktop\\AstraOrganized2\\astra-remaining-improvements\\toolchains\\dotnet8\\dotnet.exe", "test", "tests\\NetDropbox.Tests\\NetDropbox.Tests.csproj", "--disable-build-servers", "-m:1", "--no-restore"]` | 0 | [record](evidence/sol15-netdrop-tests-r4.json), [log](evidence/sol15-netdrop-tests-r4.log) |
+| `sol15-netdrop-tests-r4` | `dotnet test tests/NetDropbox.Tests/NetDropbox.Tests.csproj --disable-build-servers -m:1 --no-restore` (run with a workstation-local .NET 8 toolchain; the absolute path is in the JSON record) | 0 | [record](evidence/sol15-netdrop-tests-r4.json), [log](evidence/sol15-netdrop-tests-r4.log) |
+
+**Status (2026-10-06):** the log shows the run happened in a staging copy of the repo where `src/NetDropbox.Infrastructure/Storage/*.cs` existed on disk. Those files aren't in git, so this run **can't be reproduced from a clone** until the adapters are restored (ladder J0). The 22 test names in the tree match the 22 the log reports passing.

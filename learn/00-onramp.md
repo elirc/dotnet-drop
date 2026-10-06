@@ -1,9 +1,9 @@
 # NetDropbox on-ramp: 8 junior warm-ups
 
-Do these before `training/`. Each takes 10–25 minutes. You only need to read the code (from `main`: use `git show main:<path>` if your working tree has the uncommitted Astra changes). Exercise 6 is the only one that needs `dotnet`.
+Do these before `training/`. Each takes 10–25 minutes. You only need to read the code. **Read it at commit `d612e0b`** (`git show d612e0b:<path>`, or a worktree: `git worktree add ../netdrop-onramp d612e0b`). Exercise 6 is the only one that needs `dotnet`.
 Write your answers in your own notes file, then check them against `learn/_answers/00-onramp.md`.
 
-Line numbers refer to committed `main` (`d612e0b` source, unchanged by the training commits).
+Line numbers refer to `d612e0b`, the original source. *(Status 2026-10-06: `main` has since moved on. Commit `9d28a29` rewrote `UploadSession.cs`, `UserStorageAccount.cs`, `CompleteUpload.cs`, `UploadChunk.cs`, `Hashing.cs` and `NetDropboxDbContext.cs`, so on current `main` the line numbers in exercises 1 and 4-7 are off, and some behaviors changed. Do the exercises at `d612e0b` as written. Afterwards, comparing your answers for exercises 1, 5 and 6 with current `main` is a good extra exercise: quota preflight now runs before any blob write, the assembled length is checked, and `UploadSession.Create` rejects a hash that isn't 64 hex characters. `astraupskill/03-WORKED-CHANGE.md` walks through that diff.)*
 
 ---
 
@@ -45,11 +45,11 @@ Read `CompleteUploadHandler.Handle` (`src/NetDropbox.Application/Uploads/Complet
 - (b) Which of them happen inside the single transaction at line 82, and which happen before or after it?
 - (c) The process crashes right after line 82 finishes. Which work is lost, and which row will say something that isn't true?
 - (d) The blob is saved at line 54, but `SaveChangesAsync` at line 82 then fails. What's left behind in the blob store?
-Link: [01 transactional outbox](../../opusorganize/apprenticeship/curriculum/01-transactional-outbox.md).
+Link: *01 transactional outbox* (external apprenticeship note, not in this repo).
 
 ## 6. Write one characterization test (25 min, needs `dotnet`)
-A characterization test pins what the code **does today**, not what it should do. See [04 characterization tests](../../opusorganize/apprenticeship/curriculum/04-characterization-tests.md).
-In a worktree (`git worktree add ../netdrop-onramp -b learn/onramp main`), add `tests/NetDropbox.Tests/Domain/BlobObjectTests.cs` in the same style as `UserStorageAccountTests.cs`. Write one test per current behavior:
+A characterization test pins what the code **does today**, not what it should do. See *04 characterization tests* (external apprenticeship note, not in this repo).
+In a worktree based on `d612e0b` (`git worktree add ../netdrop-onramp -b learn/onramp d612e0b`; on current `main` the test project won't compile without the missing storage adapters, see `learn/README.md`), add `tests/NetDropbox.Tests/Domain/BlobObjectTests.cs` in the same style as `UserStorageAccountTests.cs`. Write one test per current behavior:
 - `BlobObject.Create(...)` starts with `RefCount == 1` (`BlobObject.cs:14`).
 - Calling `RemoveReference()` twice on a new blob leaves `RefCount == 0` and doesn't throw (`BlobObject.cs:35-40`).
 - `UploadSession.Create` with `totalSize: 0` gives `TotalChunks == 1` (`UploadSession.cs:40`).

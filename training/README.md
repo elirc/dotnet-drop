@@ -2,9 +2,11 @@
 
 NetDropbox is a .NET 8 Web API (Api / Application / Domain / Infrastructure), a React + TypeScript SPA, Postgres, a local or S3 blob store, and an in-process background worker. It's the richest distributed-consistency material in the archive: one upload touches three stores with no shared transaction.
 
-**Base commit:** `main` @ `d612e0b`. All exercises target the *committed* code. The working tree also holds the uncommitted Astra upload-integrity changes (`astraupskill/`). Leave them alone and use `git worktree` for everything.
+**Base commit:** `main` @ `d612e0b`. All exercises target the *committed* code at that commit. *(Status 2026-10-06: the Astra upload-integrity changes this line once called "uncommitted" are now committed on `main` as `9d28a29`. Exercises still target `d612e0b`; use `git worktree` for everything.)*
 
-> **Warning:** `main` as committed doesn't build (the storage adapters are git-ignored) and its EF model throws at startup. That's review findings #1–#2 and ladder **J0**. Incident branches carry a commit that adds the adapters, so they build.
+> **Warning:** `main` as committed doesn't build (the storage adapters are git-ignored) and, at `d612e0b`, its EF model throws at startup. That's review findings #1–#2 and ladder **J0**. *(Status 2026-10-06: the EF mapping is fixed on current `main` by `9d28a29`; the adapters are still missing.)* The incident branches were meant to carry a commit that adds the adapters.
+>
+> **Status (2026-10-06): the incident branches were never pushed.** `git branch -r` on a fresh clone lists only `origin/main`, so none of `training/incidents/NNN-*` exists remotely, and neither do their adapter commits. The incident briefs, review, ladder, navigation and interview material are all still usable. The five incidents can be read and reasoned about, but can't be bisected or reproduced. Details: `incidents/README.md`.
 
 ## Suggested order (about 50 hours total)
 
